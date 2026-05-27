@@ -126,22 +126,28 @@ export default function App() {
 
   // --- Administrators cloud database mutations ---
   const handleAddCentralSong = async (newSong: Song) => {
-    const docId = newSong.id || `central-${Math.random().toString(36).substring(2, 12)}`;
+    const rawId = newSong.id || `central-${Math.random().toString(36).substring(2, 12)}`;
+    const docId = rawId.startsWith("custom-") ? rawId.replace("custom-", "central-") : rawId;
     const isAdmin = localStorage.getItem("playcifras_admin_logged") === "true";
     if (isAdmin) {
       setLoadingSync(true);
       try {
-        await setDoc(doc(db, "songs", docId), {
+        const payload: any = {
           id: docId,
           title: newSong.title,
           artist: newSong.artist,
           tone: newSong.tone,
-          bpm: newSong.bpm || null,
           rawLrc: newSong.rawLrc,
           ownerId: "admin",
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
-        });
+        };
+        if (newSong.bpm && typeof newSong.bpm === "number" && !isNaN(newSong.bpm)) {
+          payload.bpm = newSong.bpm;
+        } else {
+          payload.bpm = null;
+        }
+        await setDoc(doc(db, "songs", docId), payload);
       } catch (error) {
         handleFirestoreError(error, OperationType.CREATE, `songs/${docId}`);
       } finally {
@@ -168,17 +174,22 @@ export default function App() {
             originalCreatedAt = data.createdAt;
           }
         }
-        await setDoc(docRef, {
+        const payload: any = {
           id: updatedSong.id,
           title: updatedSong.title,
           artist: updatedSong.artist,
           tone: updatedSong.tone,
-          bpm: updatedSong.bpm || null,
           rawLrc: updatedSong.rawLrc,
           ownerId: "admin",
           createdAt: originalCreatedAt,
           updatedAt: serverTimestamp(),
-        });
+        };
+        if (updatedSong.bpm && typeof updatedSong.bpm === "number" && !isNaN(updatedSong.bpm)) {
+          payload.bpm = updatedSong.bpm;
+        } else {
+          payload.bpm = null;
+        }
+        await setDoc(docRef, payload);
       } catch (error) {
         handleFirestoreError(error, OperationType.UPDATE, `songs/${updatedSong.id}`);
       } finally {

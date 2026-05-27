@@ -42,7 +42,7 @@ service cloud.firestore {
         && data.rawLrc.size() <= 100000
         && data.ownerId is string 
         && data.ownerId.size() <= 128
-        && (!('bpm' in data) || (data.bpm is number && data.bpm >= 20 && data.bpm <= 300));
+        && (!('bpm' in data) || data.bpm == null || (data.bpm is number && data.bpm >= 20 && data.bpm <= 300));
     }
 
     // --- Songs Collection Rules ---
