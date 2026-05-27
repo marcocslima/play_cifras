@@ -73,9 +73,18 @@ export default function App() {
 
   const [loadingSync, setLoadingSync] = useState(true);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
 
-  // Synchronize with Firebase Firestore
+  // Synchronize with Firebase Firestore and Auth status
   useEffect(() => {
+    // 0. Listen to auth changes
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (currentUser && currentUser.email === "marcocslima@gmail.com") {
+        localStorage.setItem("playcifras_admin_logged", "true");
+      }
+    });
+
     // 1. Listen to central catalog ("ownerId" == "admin")
     let unsubscribeCentral: () => void = () => {};
     try {
@@ -120,6 +129,7 @@ export default function App() {
     }
 
     return () => {
+      unsubscribeAuth();
       unsubscribeCentral();
     };
   }, []);
@@ -128,7 +138,7 @@ export default function App() {
   const handleAddCentralSong = async (newSong: Song) => {
     const rawId = newSong.id || `central-${Math.random().toString(36).substring(2, 12)}`;
     const docId = rawId.startsWith("custom-") ? rawId.replace("custom-", "central-") : rawId;
-    const isAdmin = localStorage.getItem("playcifras_admin_logged") === "true";
+    const isAdmin = localStorage.getItem("playcifras_admin_logged") === "true" || (auth.currentUser && auth.currentUser.email === "marcocslima@gmail.com");
     if (isAdmin) {
       setLoadingSync(true);
       try {
@@ -162,7 +172,7 @@ export default function App() {
 
   const handleUpdateCentralSong = async (updatedSong: Song) => {
     const docRef = doc(db, "songs", updatedSong.id);
-    const isAdmin = localStorage.getItem("playcifras_admin_logged") === "true";
+    const isAdmin = localStorage.getItem("playcifras_admin_logged") === "true" || (auth.currentUser && auth.currentUser.email === "marcocslima@gmail.com");
     if (isAdmin) {
       setLoadingSync(true);
       try {
@@ -203,7 +213,7 @@ export default function App() {
   };
 
   const handleDeleteCentralSong = async (id: string) => {
-    const isAdmin = localStorage.getItem("playcifras_admin_logged") === "true";
+    const isAdmin = localStorage.getItem("playcifras_admin_logged") === "true" || (auth.currentUser && auth.currentUser.email === "marcocslima@gmail.com");
     if (isAdmin) {
       setLoadingSync(true);
       try {
@@ -286,7 +296,7 @@ export default function App() {
             {showAdminPanel ? (
               <AdminPanel
                 songs={centralSongs}
-                userEmail={undefined}
+                userEmail={user?.email}
                 onAddCentralSong={handleAddCentralSong}
                 onUpdateCentralSong={handleUpdateCentralSong}
                 onDeleteCentralSong={handleDeleteCentralSong}
