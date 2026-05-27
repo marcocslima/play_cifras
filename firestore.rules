@@ -1,0 +1,58 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Catch-All Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Functions ---
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidSong(data) {
+      return data.keys().hasAll(['id', 'title', 'artist', 'tone', 'rawLrc', 'ownerId', 'createdAt', 'updatedAt'])
+        && data.keys().size() >= 8 
+        && data.keys().size() <= 9
+        && data.id is string 
+        && data.id.size() <= 128
+        && data.title is string 
+        && data.title.size() <= 200
+        && data.artist is string 
+        && data.artist.size() <= 200
+        && data.tone is string 
+        && data.tone.size() <= 10
+        && data.rawLrc is string 
+        && data.rawLrc.size() <= 100000
+        && data.ownerId is string 
+        && data.ownerId.size() <= 128
+        && (!('bpm' in data) || (data.bpm is number && data.bpm >= 20 && data.bpm <= 300));
+    }
+
+    // --- Songs Collection Rules ---
+    match /songs/{songId} {
+      // Anyone can read and list all songs in the catalog
+      allow read, list: if true;
+      
+      // Allow creation, updates, and deletion of songs by anyone (enables administrators local login writes)
+      allow create, update: if isValidId(songId) && isValidSong(incoming());
+      allow delete: if true;
+    }
+  }
+}

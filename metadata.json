@@ -1,0 +1,6 @@
+{
+  "name": "Play Cifras",
+  "description": "Visualizador e leitor de cifras com rolagem automática sincronizada por formato LRC integrado e face tracking.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

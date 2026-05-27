@@ -1,0 +1,27 @@
+{
+  "entities": {
+    "Song": {
+      "title": "Song",
+      "description": "A lyric-chord sheet in LRC format with settings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "artist": { "type": "string" },
+        "tone": { "type": "string" },
+        "bpm": { "type": "number" },
+        "rawLrc": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "artist", "tone", "rawLrc", "ownerId"]
+    }
+  },
+  "firestore": {
+    "songs/{songId}": {
+      "schema": "Song",
+      "description": "User created songs with LRC annotations"
+    }
+  }
+}
