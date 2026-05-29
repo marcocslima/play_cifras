@@ -26,11 +26,14 @@ service cloud.firestore {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_-]+$');
     }
 
+    function isAdmin() {
+      return isSignedIn() 
+        && request.auth.token.email == "marcocslima@gmail.com" 
+        && request.auth.token.email_verified == true;
+    }
+
     function isValidSong(data) {
-      return data.keys().hasAll(['id', 'title', 'artist', 'tone', 'rawLrc', 'ownerId', 'createdAt', 'updatedAt'])
-        && data.keys().size() >= 8 
-        && data.keys().size() <= 9
-        && data.id is string 
+      return data.id is string 
         && data.id.size() <= 128
         && data.title is string 
         && data.title.size() <= 200
@@ -42,7 +45,9 @@ service cloud.firestore {
         && data.rawLrc.size() <= 100000
         && data.ownerId is string 
         && data.ownerId.size() <= 128
-        && (!('bpm' in data) || data.bpm == null || ((data.bpm is int || data.bpm is float) && data.bpm >= 20 && data.bpm <= 300));
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && (data.get('bpm', null) == null || (data.bpm >= 20 && data.bpm <= 300));
     }
 
     // --- Songs Collection Rules ---
@@ -50,9 +55,9 @@ service cloud.firestore {
       // Anyone can read and list all songs in the catalog
       allow read, list: if true;
       
-      // Allow creation, updates, and deletion of songs by anyone (enables administrators local login writes)
-      allow create, update: if isValidId(songId) && isValidSong(incoming());
-      allow delete: if true;
+      // Allow creation, updates, and deletion of songs strictly by authorized administrators (Zero-Trust)
+      allow create, update: if isAdmin() && isValidId(songId) && isValidSong(incoming());
+      allow delete: if isAdmin() && isValidId(songId);
     }
   }
 }
