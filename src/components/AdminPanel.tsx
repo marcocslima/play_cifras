@@ -1,84 +1,37 @@
-import React, { useState, useEffect } from "react";
-import { 
-  Lock, 
-  Shield, 
-  Key, 
-  Plus, 
-  Trash2, 
-  Edit2, 
-  Save, 
-  LogOut, 
-  AlertCircle, 
-  CheckCircle, 
-  Music, 
-  Guitar, 
-  X,
-  FileText,
-  Clock,
-  User,
-  Crown
+import React, { useState } from "react";
+import {
+  Shield, Plus, Trash2, Edit2, Save, LogOut, AlertCircle,
+  CheckCircle, Music, X, Crown, Users
 } from "lucide-react";
 import { Song } from "../types";
 import SongForm from "./SongForm";
-import { loginWithGoogle, logout } from "../firebase";
+import { useAuth } from "../contexts/AuthContext";
+import UserManagement from "./admin/UserManagement";
 
 interface AdminPanelProps {
   songs: Song[];
-  userEmail: string | null | undefined;
   onAddCentralSong: (song: Song) => Promise<void>;
   onUpdateCentralSong: (song: Song) => Promise<void>;
   onDeleteCentralSong: (id: string) => Promise<void>;
   onClose: () => void;
 }
 
+type AdminTab = "cifras" | "users";
+
 export default function AdminPanel({
   songs,
-  userEmail,
   onAddCentralSong,
   onUpdateCentralSong,
   onDeleteCentralSong,
-  onClose
+  onClose,
 }: AdminPanelProps) {
-  // Session state (supports username/password or Google admin email)
-  const [isAdminSession, setIsAdminSession] = useState<boolean>(() => {
-    return localStorage.getItem("playcifras_admin_logged") === "true";
-  });
-  
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [loginError, setLoginError] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
+  const { user, userProfile, isAdmin, logout } = useAuth();
 
-  // Editing state
+  const [activeTab, setActiveTab] = useState<AdminTab>("cifras");
+  const [successMsg, setSuccessMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
   const [editingSong, setEditingSong] = useState<Song | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
-
-  // Auto-authorize if user logged in via Google has the admin email
-  const isAdminByEmail = userEmail === "marcocslima@gmail.com";
-  const isAuthenticated = isAdminSession || isAdminByEmail;
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (username.trim() === "admin" && password === "playcifras123") {
-      setIsAdminSession(true);
-      localStorage.setItem("playcifras_admin_logged", "true");
-      setLoginError("");
-      setSuccessMsg("Acesso Administrativo concedido com sucesso!");
-      setTimeout(() => setSuccessMsg(""), 3000);
-    } else {
-      setLoginError("Credenciais administrativas incorretas. Tente novamente.");
-    }
-  };
-
-  const handleLogout = async () => {
-    setIsAdminSession(false);
-    localStorage.removeItem("playcifras_admin_logged");
-    try {
-      await logout();
-    } catch (e) {
-      console.warn("Error calling logout:", e);
-    }
-  };
 
   const handleEditClick = (song: Song) => {
     setEditingSong(song);
@@ -86,13 +39,13 @@ export default function AdminPanel({
   };
 
   const handleDeleteClick = async (id: string) => {
-    if (confirm("Deseja realmente excluir esta cifra do catálogo central de cifras disponíveis?")) {
+    if (confirm("Deseja realmente excluir esta cifra do catálogo central?")) {
       try {
         await onDeleteCentralSong(id);
         setSuccessMsg("Cifra removida com sucesso!");
         setTimeout(() => setSuccessMsg(""), 3000);
       } catch (e: any) {
-        setLoginError("Erro ao excluir cifra: " + e.message);
+        setErrorMsg("Erro ao excluir cifra: " + e.message);
       }
     }
   };
@@ -100,28 +53,29 @@ export default function AdminPanel({
   const handleSaveSongForm = async (song: Song) => {
     try {
       if (editingSong) {
-        // Mode update: preserve historical creation parameters if needed
         const updated = { ...song, id: editingSong.id };
         await onUpdateCentralSong(updated);
         setSuccessMsg("Cifra central atualizada com sucesso!");
         setEditingSong(null);
       } else {
-        // Mode create
         await onAddCentralSong(song);
         setSuccessMsg("Nova cifra central adicionada com sucesso!");
         setIsAddingNew(false);
       }
       setTimeout(() => setSuccessMsg(""), 4000);
     } catch (e: any) {
-      setLoginError("Erro ao salvar cifra: " + e.message);
+      setErrorMsg("Erro ao salvar cifra: " + e.message);
     }
+  };
+
+  const handleLogout = async () => {
+    await logout();
   };
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl relative">
-      {/* Back glow */}
       <div className="absolute top-0 left-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
-      
+
       {/* Header */}
       <div className="bg-slate-950 p-5 border-b border-slate-850 flex items-center justify-between z-10 relative">
         <div className="flex items-center gap-2.5">
@@ -131,16 +85,16 @@ export default function AdminPanel({
           <div>
             <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
               Painel Administrativo
-              {isAuthenticated && (
-                <span className="text-[9px] bg-red-500/15 text-red-400 uppercase font-extrabold px-2 py-0.5 rounded-full border border-red-500/25 tracking-wider">
-                  Sessão Ativa
-                </span>
-              )}
+              <span className="text-[9px] bg-red-500/15 text-red-400 uppercase font-extrabold px-2 py-0.5 rounded-full border border-red-500/25 tracking-wider">
+                Sessão Ativa
+              </span>
             </h2>
-            <p className="text-slate-400 text-xs">Gerenciamento exclusivo das cifras disponíveis na biblioteca global</p>
+            <p className="text-slate-400 text-xs">
+              Gerenciamento de cifras e usuários da plataforma
+            </p>
           </div>
         </div>
-        
+
         <button
           onClick={onClose}
           className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition duration-150 cursor-pointer"
@@ -150,103 +104,53 @@ export default function AdminPanel({
         </button>
       </div>
 
-      {/* Main Content Area */}
+      {/* Tabs */}
+      <div className="bg-slate-950/50 border-b border-slate-850 px-5 flex gap-1">
+        <button
+          onClick={() => setActiveTab("cifras")}
+          className={`px-4 py-3 text-xs font-bold border-b-2 transition cursor-pointer ${
+            activeTab === "cifras"
+              ? "text-indigo-400 border-indigo-400"
+              : "text-slate-400 border-transparent hover:text-slate-200"
+          }`}
+        >
+          <Music className="w-3.5 h-3.5 inline mr-1.5" />
+          Cifras ({songs.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("users")}
+          className={`px-4 py-3 text-xs font-bold border-b-2 transition cursor-pointer ${
+            activeTab === "users"
+              ? "text-indigo-400 border-indigo-400"
+              : "text-slate-400 border-transparent hover:text-slate-200"
+          }`}
+        >
+          <Users className="w-3.5 h-3.5 inline mr-1.5" />
+          Usuários
+        </button>
+      </div>
+
+      {/* Content */}
       <div className="p-6 relative z-10 min-h-[300px]">
         {successMsg && (
-          <div className="mb-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3.5 flex items-center gap-2.5 text-emerald-400 text-xs animate-fade-in">
+          <div className="mb-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3.5 flex items-center gap-2.5 text-emerald-400 text-xs">
             <CheckCircle className="w-4.5 h-4.5 shrink-0" />
             <span>{successMsg}</span>
           </div>
         )}
-
-        {loginError && (
-          <div className="mb-4 bg-rose-500/10 border border-rose-500/20 rounded-xl p-3.5 flex items-center gap-2.5 text-rose-300 text-xs animate-fade-in">
+        {errorMsg && (
+          <div className="mb-4 bg-rose-500/10 border border-rose-500/20 rounded-xl p-3.5 flex items-center gap-2.5 text-rose-300 text-xs">
             <AlertCircle className="w-4.5 h-4.5 shrink-0" />
-            <span>{loginError}</span>
-            <button onClick={() => setLoginError("")} className="ml-auto text-rose-400 hover:text-white font-bold px-1.5 py-0.5">X</button>
+            <span>{errorMsg}</span>
+            <button onClick={() => setErrorMsg("")} className="ml-auto text-rose-400 hover:text-white font-bold px-1.5 py-0.5">X</button>
           </div>
         )}
 
-        {!isAuthenticated ? (
-          /* Login Section */
-          <div className="max-w-md mx-auto py-8">
-            <div className="bg-slate-950/80 p-6 rounded-2xl border border-slate-850 shadow-inner flex flex-col gap-5">
-              <div className="text-center">
-                <div className="w-12 h-12 bg-indigo-500/10 text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <Lock className="w-6 h-6" />
-                </div>
-                <h3 className="text-sm font-bold text-slate-200">Acesso Restrito a Administradores</h3>
-                <p className="text-slate-400 text-xs mt-1">Insira as credenciais ou use sua conta Google autorizada</p>
-              </div>
-
-              <form onSubmit={handleLogin} className="flex flex-col gap-4 mt-2">
-                <div>
-                  <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">Usuário</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Nome de usuário"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-200 placeholder:text-slate-650 focus:outline-none focus:border-indigo-500 transition"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">Senha</label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="••••••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-200 placeholder:text-slate-650 focus:outline-none focus:border-indigo-500 transition"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full mt-2 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-lg hover:shadow-indigo-600/10 transition duration-155 cursor-pointer flex items-center justify-center gap-1.5 border border-indigo-500"
-                >
-                  <Key className="w-4 h-4" /> Entrar como Admin
-                </button>
-              </form>
-
-              <div className="relative flex py-2 items-center">
-                <div className="flex-grow border-t border-slate-850"></div>
-                <span className="flex-shrink mx-3 text-[10px] text-slate-500 font-extrabold uppercase tracking-widest">Ou</span>
-                <div className="flex-grow border-t border-slate-850"></div>
-              </div>
-
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    const loggedUser = await loginWithGoogle();
-                    if (loggedUser) {
-                      setSuccessMsg("Autenticação com Google bem-sucedida!");
-                      setTimeout(() => setSuccessMsg(""), 3000);
-                    }
-                  } catch (e: any) {
-                    setLoginError("Erro ao fazer login com o Google: " + e.message);
-                  }
-                }}
-                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-bold rounded-xl shadow border border-slate-800 hover:border-slate-700 transition duration-150 cursor-pointer flex items-center justify-center gap-2"
-              >
-                <svg className="w-4 h-4 text-white shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22c-.82-2.63-.82-5.75 0-8.38z" fill="#FBBC05"/>
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
-                </svg>
-                Google Admin Login
-              </button>
-            </div>
-          </div>
+        {activeTab === "users" ? (
+          <UserManagement />
         ) : (
-          /* Logged In Admin view */
           <div>
-            {/* Admin Toolbar / Header Meta */}
+            {/* Admin Toolbar */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-950/50 p-4 rounded-xl border border-slate-850 mb-6">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-400 shrink-0 border border-red-500/20">
@@ -254,14 +158,14 @@ export default function AdminPanel({
                 </div>
                 <div>
                   <p className="text-xs font-bold text-slate-200">
-                    Administrador: Sessão Ativa
+                    {userProfile?.displayName || user?.displayName || "Administrador"} · Sessão Ativa
                   </p>
                   <span className="text-[10px] text-slate-450 font-medium">
-                    Alterações salvam e atualizam diretamente o banco de dados principal do Firestore.
+                    Alterações salvam diretamente no Firestore.
                   </span>
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
                 <button
                   onClick={() => {
@@ -272,24 +176,22 @@ export default function AdminPanel({
                 >
                   <Plus className="w-4 h-4" /> Nova Cifra Central
                 </button>
-                
-                {isAdminSession && (
-                  <button
-                    onClick={handleLogout}
-                    className="px-3 py-2 bg-slate-850 hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-xs font-bold rounded-lg cursor-pointer transition flex items-center gap-1.5 border border-slate-750"
-                  >
-                    <LogOut className="w-4 h-4" /> Sair
-                  </button>
-                )}
+
+                <button
+                  onClick={handleLogout}
+                  className="px-3 py-2 bg-slate-850 hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-xs font-bold rounded-lg cursor-pointer transition flex items-center gap-1.5 border border-slate-750"
+                >
+                  <LogOut className="w-4 h-4" /> Sair
+                </button>
               </div>
             </div>
 
-            {/* Dynamic Views: Form Edit/Add, or Catalog List */}
+            {/* Form or List */}
             {isAddingNew || editingSong ? (
-              <div className="bg-slate-950/30 p-4 rounded-2xl border border-slate-850 animate-fade-in">
+              <div className="bg-slate-950/30 p-4 rounded-2xl border border-slate-850">
                 <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-800">
                   <span className="text-xs font-bold text-slate-300 uppercase tracking-widest block">
-                    {editingSong ? `Editando: ${editingSong.title}` : "Inserir Nova Cifra no Catálogo de Disponíveis"}
+                    {editingSong ? `Editando: ${editingSong.title}` : "Inserir Nova Cifra"}
                   </span>
                   <button
                     onClick={() => {
@@ -301,9 +203,8 @@ export default function AdminPanel({
                     Cancelar
                   </button>
                 </div>
-                
+
                 {editingSong ? (
-                  /* Custom wrapper of form editing to fill in props */
                   <SongFormEditHelper
                     song={editingSong}
                     onSave={handleSaveSongForm}
@@ -317,7 +218,6 @@ export default function AdminPanel({
                 )}
               </div>
             ) : (
-              /* Catalog Table list view */
               <div className="bg-slate-950 rounded-xl border border-slate-850 overflow-hidden">
                 <div className="p-4 bg-slate-950 border-b border-slate-850 text-xs font-extrabold text-slate-400 uppercase tracking-wider grid grid-cols-12 gap-2 select-none">
                   <div className="col-span-5 sm:col-span-6">Cifra / Artista</div>
@@ -329,8 +229,8 @@ export default function AdminPanel({
                 <div className="divide-y divide-slate-850 flex flex-col">
                   {songs.length > 0 ? (
                     songs.map((song) => (
-                      <div 
-                        key={song.id} 
+                      <div
+                        key={song.id}
                         className="p-4 grid grid-cols-12 gap-2 items-center text-sm hover:bg-slate-900/40 transition duration-150"
                       >
                         <div className="col-span-5 sm:col-span-6 flex items-center gap-2.5 min-w-0">
@@ -342,17 +242,14 @@ export default function AdminPanel({
                             <p className="text-slate-500 text-xs truncate mt-0.5">{song.artist}</p>
                           </div>
                         </div>
-
                         <div className="col-span-3 sm:col-span-2 text-center">
                           <span className="px-2 py-0.5 bg-indigo-500/10 text-indigo-400 font-mono font-bold rounded text-xs border border-indigo-500/10">
                             {song.tone}
                           </span>
                         </div>
-
                         <div className="col-span-2 hidden sm:block text-center font-mono text-slate-400">
                           {song.bpm || "--"}
                         </div>
-
                         <div className="col-span-4 sm:col-span-2 flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => handleEditClick(song)}
@@ -361,7 +258,6 @@ export default function AdminPanel({
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
-                          
                           <button
                             onClick={() => handleDeleteClick(song.id)}
                             className="p-2 bg-slate-900 hover:bg-rose-950/30 text-slate-450 hover:text-rose-400 border border-slate-800 rounded-lg transition cursor-pointer"
@@ -387,7 +283,7 @@ export default function AdminPanel({
   );
 }
 
-/* Mini edit helper so we don't have to redefine editing UI */
+/* Mini edit helper */
 interface SongFormEditHelperProps {
   song: Song;
   onSave: (song: Song) => Promise<void>;
@@ -414,7 +310,7 @@ function SongFormEditHelper({ song, onSave, onCancel }: SongFormEditHelperProps)
       artist: artist.trim(),
       tone: tone.trim(),
       bpm: Number(bpm) || 90,
-      rawLrc: rawLrc.trim()
+      rawLrc: rawLrc.trim(),
     });
   };
 
@@ -425,74 +321,33 @@ function SongFormEditHelper({ song, onSave, onCancel }: SongFormEditHelperProps)
           {errorMsg}
         </div>
       )}
-
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Nome da Música</label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
-            required
-          />
+          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500" required />
         </div>
-
         <div>
           <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Artista</label>
-          <input
-            type="text"
-            value={artist}
-            onChange={(e) => setArtist(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
-            required
-          />
+          <input type="text" value={artist} onChange={(e) => setArtist(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500" required />
         </div>
-
         <div>
           <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Tom</label>
-          <input
-            type="text"
-            value={tone}
-            onChange={(e) => setTone(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
-          />
+          <input type="text" value={tone} onChange={(e) => setTone(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500" />
         </div>
-
         <div>
           <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">BPM</label>
-          <input
-            type="number"
-            value={bpm}
-            onChange={(e) => setBpm(Number(e.target.value))}
-            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
-          />
+          <input type="number" value={bpm} onChange={(e) => setBpm(Number(e.target.value))} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500" />
         </div>
       </div>
-
       <div>
         <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">LRC Sincronizado</label>
-        <textarea
-          rows={10}
-          value={rawLrc}
-          onChange={(e) => setRawLrc(e.target.value)}
-          className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 font-mono text-xs text-slate-200 focus:outline-none"
-          required
-        />
+        <textarea rows={10} value={rawLrc} onChange={(e) => setRawLrc(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 font-mono text-xs text-slate-200 focus:outline-none" required />
       </div>
-
       <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-800">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-3.5 py-1.5 border border-slate-805 text-xs font-semibold text-slate-400 hover:text-white rounded cursor-pointer transition"
-        >
+        <button type="button" onClick={onCancel} className="px-3.5 py-1.5 border border-slate-800 text-xs font-semibold text-slate-400 hover:text-white rounded cursor-pointer transition">
           Voltar
         </button>
-        <button
-          type="submit"
-          className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-750 text-xs font-semibold text-white rounded cursor-pointer transition flex items-center gap-1.5"
-        >
+        <button type="submit" className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-xs font-semibold text-white rounded cursor-pointer transition flex items-center gap-1.5">
           <Save className="w-3.5 h-3.5" /> Salvar Edição
         </button>
       </div>

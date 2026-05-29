@@ -3,13 +3,17 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Global Safety Net (Catch-All Deny)
+    // ============================================
+    // GLOBAL SAFETY NET (Catch-All Deny)
+    // ============================================
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // --- Helper Functions ---
-    
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+
     function isSignedIn() {
       return request.auth != null;
     }
@@ -26,38 +30,109 @@ service cloud.firestore {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_-]+$');
     }
 
+    // Verifica se o usuário é admin consultando a coleção 'users'
     function isAdmin() {
-      return isSignedIn() 
-        && request.auth.token.email == "marcocslima@gmail.com" 
-        && request.auth.token.email_verified == true;
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
     }
 
     function isValidSong(data) {
-      return data.id is string 
+      return data.id is string
         && data.id.size() <= 128
-        && data.title is string 
+        && data.title is string
         && data.title.size() <= 200
-        && data.artist is string 
+        && data.artist is string
         && data.artist.size() <= 200
-        && data.tone is string 
+        && data.tone is string
         && data.tone.size() <= 10
-        && data.rawLrc is string 
+        && data.rawLrc is string
         && data.rawLrc.size() <= 100000
-        && data.ownerId is string 
+        && data.ownerId is string
         && data.ownerId.size() <= 128
         && data.createdAt is timestamp
         && data.updatedAt is timestamp
         && (data.get('bpm', null) == null || (data.bpm >= 20 && data.bpm <= 300));
     }
 
-    // --- Songs Collection Rules ---
+    // ============================================
+    // SONGS COLLECTION
+    // Todos podem ler, apenas admins podem escrever
+    // ============================================
     match /songs/{songId} {
-      // Anyone can read and list all songs in the catalog
       allow read, list: if true;
-      
-      // Allow creation, updates, and deletion of songs strictly by authorized administrators (Zero-Trust)
       allow create, update: if isAdmin() && isValidId(songId) && isValidSong(incoming());
       allow delete: if isAdmin() && isValidId(songId);
+    }
+
+    // ============================================
+    // USERS COLLECTION
+    // - Qualquer usuário logado pode ler seu próprio documento
+    // - Admins podem ler todos os documentos
+    // - Usuários podem criar/atualizar seu próprio documento (exceto o campo role)
+    // - Apenas admins podem alterar o campo role
+    // ============================================
+    match /users/{userId} {
+      // Leitura: próprio documento OU admin pode ler todos
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+
+      // Listagem: apenas admins (para o painel de gerenciamento)
+      allow list: if isAdmin();
+
+      // Criação: o próprio usuário pode criar seu documento no primeiro login
+      // Mas o role deve ser 'user' (não pode se auto-promover)
+      allow create: if isSignedIn()
+        && request.auth.uid == userId
+        && incoming().role == 'user'
+        && incoming().uid == userId
+        && incoming().email is string;
+
+      // Atualização: 
+      // - O próprio usuário pode atualizar campos como displayName, photoURL (mas NÃO o role)
+      // - Admins podem atualizar qualquer campo (incluindo role)
+      allow update: if isSignedIn()
+        && (
+          // Caso 1: Próprio usuário, sem alterar role
+          (request.auth.uid == userId && incoming().role == existing().role)
+          ||
+          // Caso 2: Admin pode alterar tudo
+          isAdmin()
+        );
+    }
+
+    // ============================================
+    // PLAYLISTS COLLECTION
+    // Usuários logados podem CRUD suas próprias playlists
+    // ============================================
+    match /playlists/{playlistId} {
+      allow read: if isSignedIn() && isOwner(resource.data.userId);
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update: if isSignedIn() && isOwner(resource.data.userId) && incoming().userId == request.auth.uid;
+      allow delete: if isSignedIn() && isOwner(resource.data.userId);
+    }
+
+    // ============================================
+    // COMMENTS COLLECTION
+    // - Qualquer pessoa pode ler comentários
+    // - Usuários logados podem criar comentários
+    // - Usuários podem editar/deletar apenas seus próprios comentários
+    // ============================================
+    match /comments/{commentId} {
+      allow read, list: if true;
+      allow create: if isSignedIn()
+        && incoming().userId == request.auth.uid
+        && incoming().songId is string
+        && incoming().text is string
+        && incoming().text.size() <= 2000;
+      allow update: if isSignedIn()
+        && isOwner(resource.data.userId)
+        && incoming().userId == resource.data.userId
+        && incoming().songId == resource.data.songId;
+      allow delete: if isSignedIn() && isOwner(resource.data.userId);
     }
   }
 }
